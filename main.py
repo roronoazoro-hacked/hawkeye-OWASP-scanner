@@ -8,8 +8,13 @@ scanner = Scanner()
 
 # ── Auth config ──────────────────────────────────────────────────
 # Change these to whatever you want
-USERNAME = "admin"
-PASSWORD = "root"
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+USERNAME = os.getenv("SCANNER_USERNAME", "admin")
+PASSWORD = os.getenv("SCANNER_PASSWORD", "root")
 
 # Secret key signs the session cookie — change this to any long random string
 app.secret_key = "change-this-to-a-long-random-secret-key-1234"

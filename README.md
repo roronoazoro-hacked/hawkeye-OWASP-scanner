@@ -98,9 +98,12 @@ Open your browser and go to:
 http://127.0.0.1:5000
 ### Step 6 — Log in
 
-Default credentials:
-- **Username:** `admin`
-- **Password:** `root`
+### First time setup — create your `.env` file
+
+Copy `.env.example` to `.env` and set your own credentials:
+SCANNER_USERNAME=yourchoice
+SCANNER_PASSWORD=yourpassword
+Then run the scanner. Never share your `.env` file.
 
 > ⚠️ Change these in `main.py` before sharing with anyone
 
