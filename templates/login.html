@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Login — OWASP Scanner</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box }
+  body { background:#0a0e1a; color:#e0e6f0; font-family:'Courier New',monospace;
+         display:flex; align-items:center; justify-content:center; height:100vh }
+  .box { background:#0d1117; border:1px solid #1e3a5f; border-radius:12px;
+         padding:40px; width:340px }
+  h1 { color:#00b4d8; font-size:15px; letter-spacing:2px; margin-bottom:28px; text-align:center }
+  label { font-size:11px; color:#555; text-transform:uppercase; letter-spacing:1px; display:block; margin-bottom:6px }
+  input { width:100%; background:#111827; border:1px solid #1e3a5f; color:#e0e6f0;
+          padding:10px 14px; border-radius:6px; font-family:monospace; font-size:13px;
+          outline:none; margin-bottom:16px }
+  input:focus { border-color:#00b4d8 }
+  button { width:100%; background:#00b4d8; color:#0a0e1a; border:none; padding:11px;
+           border-radius:6px; font-family:monospace; font-size:13px; font-weight:bold;
+           cursor:pointer; margin-top:4px }
+  button:hover { opacity:.85 }
+  .error { background:#1a0505; border:1px solid #ef4444; color:#f87171; font-size:12px;
+           padding:10px 14px; border-radius:6px; margin-bottom:16px; text-align:center }
+  .subtitle { font-size:10px; color:#555; text-align:center; margin-bottom:24px; letter-spacing:1px }
+</style>
+</head>
+<body>
+<div class="box">
+  <h1>🔍 OWASP SCANNER</h1>
+  <div class="subtitle">SIGN IN TO CONTINUE</div>
+
+  {% if error %}
+  <div class="error">{{ error }}</div>
+  {% endif %}
+
+  <form method="POST">
+    <label>Username</label>
+    <input type="text" name="username" autofocus autocomplete="username" />
+    <label>Password</label>
+    <input type="password" name="password" autocomplete="current-password" />
+    <button type="submit">▶ Sign In</button>
+  </form>
+</div>
+</body>
+</html>

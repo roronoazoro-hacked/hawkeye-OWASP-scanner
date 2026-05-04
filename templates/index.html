@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>OWASP Vulnerability Scanner</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#0a0e1a;color:#e0e6f0;font-family:'Courier New',monospace;font-size:13px}
+  header{background:#0d1117;border-bottom:1px solid #1e3a5f;padding:14px 24px;display:flex;align-items:center;justify-content:space-between}
+  header h1{color:#00b4d8;font-size:16px;letter-spacing:2px}
+  .scan-bar{background:#0d1117;border-bottom:1px solid #1e3a5f;padding:16px 24px;display:flex;gap:10px;align-items:center}
+  .scan-bar input{flex:1;background:#111827;border:1px solid #1e3a5f;color:#e0e6f0;padding:10px 14px;border-radius:6px;font-family:monospace;font-size:13px;outline:none}
+  .scan-bar input:focus{border-color:#00b4d8}
+
+  .mode-toggle{display:flex;border:1px solid #1e3a5f;border-radius:6px;overflow:hidden;flex-shrink:0}
+  .mode-toggle button{background:#111827;color:#555;border:none;padding:10px 16px;font-family:monospace;font-size:12px;cursor:pointer;transition:all .2s}
+  .mode-toggle button.active-passive{background:#1e3a5f;color:#00b4d8}
+  .mode-toggle button.active-active{background:#3b0f0f;color:#ef4444}
+  .mode-warn{font-size:10px;color:#ef4444;display:none;align-items:center;gap:4px}
+  .mode-warn.show{display:flex}
+
+  .scan-bar button.scan-btn{background:#00b4d8;color:#0a0e1a;border:none;padding:10px 24px;border-radius:6px;font-family:monospace;font-size:13px;font-weight:bold;cursor:pointer;transition:opacity .2s;flex-shrink:0}
+  .scan-bar button.scan-btn:hover{opacity:.85}
+  .scan-bar button.scan-btn:disabled{opacity:.4;cursor:not-allowed}
+
+  .main{display:grid;grid-template-columns:320px 1fr;height:calc(100vh - 120px);overflow:hidden}
+  .sidebar{background:#0d1117;border-right:1px solid #1e3a5f;overflow-y:auto}
+  .content{overflow-y:auto;padding:16px}
+  .panel{background:#0d1117;border:1px solid #1e3a5f;border-radius:10px;margin-bottom:12px;overflow:hidden}
+  .panel-header{padding:10px 14px;background:#111827;border-bottom:1px solid #1e3a5f;font-size:11px;font-weight:bold;color:#00b4d8;letter-spacing:1px;text-transform:uppercase;display:flex;align-items:center;justify-content:space-between}
+  .check-item{padding:8px 14px;border-bottom:1px solid #0a0e1a;display:flex;align-items:center;gap:8px;font-size:12px}
+  .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .dot-wait{background:#333}
+  .dot-run{background:#fbbf24;animation:pulse 1s infinite}
+  .dot-done{background:#4ade80}
+  .dot-error{background:#ef4444}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .progress-bar{background:#1a2035;height:4px;margin:8px 14px;border-radius:4px;overflow:hidden}
+  .progress-fill{height:100%;background:#00b4d8;transition:width .5s;border-radius:4px}
+
+  /* Finding cards */
+  .finding{padding:12px 14px;border-bottom:1px solid #0a0e1a}
+  .finding:hover{background:#111827}
+  .finding-header{display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;cursor:pointer}
+  .sev{font-size:11px;padding:2px 8px;border-radius:4px;font-weight:bold}
+  .sev-CRITICAL{background:#7f1d1d;color:#fca5a5}
+  .sev-HIGH{background:#431407;color:#f87171}
+  .sev-MEDIUM{background:#451a03;color:#fbbf24}
+  .sev-LOW{background:#1e3a1e;color:#86efac}
+  .sev-INFO{background:#1e3a5f;color:#93c5fd}
+  .finding-type{font-size:12px;font-weight:bold;color:#e0e6f0}
+  .finding-detail{font-size:11px;color:#888;margin:4px 0;cursor:pointer}
+  .finding-url{font-size:11px;color:#555;word-break:break-all;cursor:pointer}
+  .finding-meta{display:flex;gap:10px;margin-top:6px;flex-wrap:wrap;cursor:pointer}
+  .meta-pill{font-size:10px;padding:2px 7px;border-radius:3px;background:#111827;color:#555;border:1px solid #1e3a5f}
+  .meta-pill.cwe{color:#a78bfa}
+  .meta-pill.cvss{color:#fbbf24}
+  .meta-pill.conf{color:#34d399}
+  .meta-pill.mode-passive{color:#00b4d8}
+  .meta-pill.mode-active{color:#ef4444}
+
+  /* Tabs */
+  .tab-bar{display:flex;gap:2px;padding:8px 14px 0;background:#111827;border-top:1px solid #1e3a5f;flex-wrap:wrap}
+  .tab{background:none;border:none;color:#555;font-family:monospace;font-size:11px;padding:5px 12px;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+  .tab:hover{color:#e0e6f0}
+  .tab.active{color:#00b4d8;border-bottom:2px solid #00b4d8}
+  .tab-panel{padding:10px 14px;font-size:11px;color:#aaa;line-height:1.6}
+  .http-block{background:#060a12;border:1px solid #1e3a5f;border-radius:4px;padding:10px;font-size:11px;color:#7dd3fc;overflow-x:auto;white-space:pre-wrap;word-break:break-all;max-height:300px;overflow-y:auto}
+  .finding-fix{font-size:11px;color:#4ade80;margin-top:4px;padding:8px 10px;background:#0a1f0a;border-radius:4px;border-left:2px solid #4ade80}
+
+  /* ── Triage UI ─────────────────────────────────────── */
+  .triage-bar{display:flex;gap:6px;align-items:center;padding:8px 14px;background:#060a12;border-top:1px solid #1e3a5f;flex-wrap:wrap}
+  .triage-label{font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;flex-shrink:0}
+  .triage-btn{font-size:11px;padding:4px 10px;border-radius:4px;border:1px solid #1e3a5f;background:transparent;color:#888;font-family:monospace;cursor:pointer;transition:all .2s}
+  .triage-btn:hover{border-color:#00b4d8;color:#e0e6f0}
+  .triage-btn.t-confirmed{border-color:#ef4444;color:#ef4444;background:#1a0505}
+  .triage-btn.t-false-positive{border-color:#4ade80;color:#4ade80;background:#051a08}
+  .triage-btn.t-accepted-risk{border-color:#fbbf24;color:#fbbf24;background:#1a1205}
+  .triage-status{font-size:10px;padding:3px 8px;border-radius:4px;font-weight:bold;margin-left:auto}
+  .ts-Confirmed{background:#3b0f0f;color:#f87171}
+  .ts-False\ Positive{background:#0a1f0a;color:#4ade80}
+  .ts-Accepted\ Risk{background:#1a1205;color:#fbbf24}
+  .ts-Unreviewed{background:#1e3a5f;color:#555}
+
+  /* ── Export toolbar ────────────────────────────────── */
+  .export-bar{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+  .export-btn{font-size:11px;padding:6px 14px;border:1px solid #1e3a5f;border-radius:6px;background:transparent;color:#888;font-family:monospace;cursor:pointer;transition:all .2s}
+  .export-btn:hover{border-color:#00b4d8;color:#00b4d8}
+  .export-btn.pdf{border-color:#ef4444;color:#ef4444}
+  .export-btn.pdf:hover{background:#1a0505}
+  .export-btn.json{border-color:#fbbf24;color:#fbbf24}
+  .export-btn.json:hover{background:#1a1205}
+  .export-btn.sarif{border-color:#a78bfa;color:#a78bfa}
+  .export-btn.sarif:hover{background:#0d0a1a}
+  .export-label{font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px}
+
+  /* Diff banner */
+  .diff-banner{background:#0d1117;border:1px solid #1e3a5f;border-radius:8px;padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  .diff-title{font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;flex-shrink:0}
+  .diff-stat{text-align:center}
+  .diff-stat .num{font-size:20px;font-weight:bold}
+  .diff-stat .lbl{font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px}
+  .diff-new{color:#ef4444}
+  .diff-fixed{color:#4ade80}
+  .diff-persist{color:#fbbf24}
+  .diff-vs{font-size:10px;color:#555;margin-left:auto}
+
+  .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+  .stat-card{background:#0d1117;border:1px solid #1e3a5f;border-radius:8px;padding:12px;text-align:center}
+  .stat-val{font-size:22px;font-weight:bold;color:#00b4d8}
+  .stat-label{font-size:10px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-top:2px}
+  .stat-val.critical{color:#ef4444}
+  .stat-val.high{color:#f97316}
+  .stat-val.medium{color:#fbbf24}
+  .empty{padding:40px;text-align:center;color:#333}
+  .scan-history{padding:8px 0}
+  .hist-item{padding:8px 14px;cursor:pointer;border-bottom:1px solid #0a0e1a;transition:background .15s}
+  .hist-item:hover{background:#111827}
+  .hist-item.active{background:#1e3a5f}
+  .hist-url{font-size:11px;color:#00b4d8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hist-meta{font-size:10px;color:#555;margin-top:2px;display:flex;gap:6px;align-items:center}
+  .mode-badge{font-size:9px;padding:1px 5px;border-radius:3px;font-weight:bold}
+  .mode-badge.passive{background:#1e3a5f;color:#00b4d8}
+  .mode-badge.active{background:#3b0f0f;color:#ef4444}
+  .risk-HIGH{color:#f97316}
+  .risk-CRITICAL{color:#ef4444}
+  .risk-MEDIUM{color:#fbbf24}
+  .risk-LOW{color:#4ade80}
+  .risk-CLEAN{color:#4ade80}
+  .risk-cancelled{color:#555}
+  ::-webkit-scrollbar{width:4px}
+  ::-webkit-scrollbar-track{background:#0a0e1a}
+  ::-webkit-scrollbar-thumb{background:#1e3a5f;border-radius:2px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🔍 OWASP VULNERABILITY SCANNER</h1>
+  <span style="color:#555;font-size:11px">OWASP Top 10 — 2021</span>
+  <div style="display:flex;gap:8px;align-items:center">
+  <button onclick="toggleWebhookPanel()" style="color:#555;font-size:11px;background:none;border:1px solid #1e3a5f;padding:4px 12px;border-radius:4px;font-family:monospace;cursor:pointer">🔔 Webhook</button>
+  <a href="/logout" style="color:#555;font-size:11px;text-decoration:none;border:1px solid #1e3a5f;padding:4px 12px;border-radius:4px;font-family:monospace">⏻ Logout</a>
+</div>
+<div id="webhook-panel" style="display:none;position:fixed;top:50px;right:16px;background:#0d1117;border:1px solid #1e3a5f;border-radius:8px;padding:16px;z-index:999;width:380px">
+  <div style="font-size:11px;color:#00b4d8;font-weight:bold;margin-bottom:10px;letter-spacing:1px">🔔 WEBHOOK SETTINGS</div>
+  <div style="font-size:11px;color:#555;margin-bottom:8px">Paste a Slack or Teams webhook URL to get notified when scans complete.</div>
+  <input id="webhook-input" type="text" placeholder="https://hooks.slack.com/services/..." style="width:100%;background:#111827;border:1px solid #1e3a5f;color:#e0e6f0;padding:8px 10px;border-radius:4px;font-family:monospace;font-size:11px;outline:none;margin-bottom:8px"/>
+  <div style="display:flex;gap:6px">
+    <button onclick="saveWebhook()" style="flex:1;background:#00b4d8;color:#0a0e1a;border:none;padding:7px;border-radius:4px;font-family:monospace;font-size:11px;font-weight:bold;cursor:pointer">Save</button>
+    <button onclick="testWebhook()" style="flex:1;background:transparent;color:#00b4d8;border:1px solid #00b4d8;padding:7px;border-radius:4px;font-family:monospace;font-size:11px;cursor:pointer">Test</button>
+    <button onclick="toggleWebhookPanel()" style="background:transparent;color:#555;border:1px solid #1e3a5f;padding:7px 12px;border-radius:4px;font-family:monospace;font-size:11px;cursor:pointer">✕</button>
+  </div>
+  <div id="webhook-status" style="font-size:10px;color:#555;margin-top:8px"></div>
+</div>
+</header>
+
+<div class="scan-bar">
+  <input id="url-input" type="text" placeholder="Enter target URL — e.g. https://example.com" />
+
+  <div class="mode-toggle">
+    <button id="btn-passive" class="active-passive" onclick="setMode('passive')">🛡 PASSIVE</button>
+    <button id="btn-active" onclick="setMode('active')">⚡ ACTIVE</button>
+  </div>
+
+  <div class="mode-warn" id="mode-warn">⚠ Only scan targets you own</div>
+
+  <button class="scan-btn" id="scan-btn" onclick="startScan()">▶ Scan</button>
+</div>
+
+<div class="main">
+  <div class="sidebar">
+    <div class="panel-header" style="padding:10px 14px;">Scan History</div>
+    <div class="scan-history" id="history"></div>
+  </div>
+
+  <div class="content" id="content">
+    <div class="empty">Enter a URL above and click Scan to begin.<br><br>
+    <span style="color:#555">🛡 Passive mode — safe for any target (headers + HTML only)<br>
+    ⚡ Active mode — sends payloads, only use on targets you own</span></div>
+  </div>
+</div>
+
+<script>
+let currentScanId = null;
+let pollInterval  = null;
+let allScans      = {};
+let selectedMode  = "passive";
+
+// Load all previous scans from server on page load
+(async function loadHistory() {
+  try {
+    const res  = await fetch("/api/scans");
+    if (res.status === 401) { window.location.href = "/login"; return; }
+    const data = await res.json();
+    const scans = Array.isArray(data) ? data : [];
+    scans.forEach(s => { allScans[s.id] = s; });
+    renderHistory();
+  } catch(e) {
+    console.error("Failed to load history:", e);
+  }
+})();
+
+function setMode(mode) {
+  selectedMode = mode;
+  document.getElementById("btn-passive").className = mode === "passive" ? "active-passive" : "";
+  document.getElementById("btn-active").className  = mode === "active"  ? "active-active"  : "";
+  const warn = document.getElementById("mode-warn");
+  mode === "active" ? warn.classList.add("show") : warn.classList.remove("show");
+}
+
+function riskLabel(score) {
+  if (score >= 40) return "CRITICAL";
+  if (score >= 20) return "HIGH";
+  if (score >= 10) return "MEDIUM";
+  if (score > 0)   return "LOW";
+  return "CLEAN";
+}
+
+async function startScan() {
+  const url = document.getElementById("url-input").value.trim();
+  if (!url) { alert("Please enter a URL"); return; }
+
+  document.getElementById("scan-btn").disabled    = true;
+  document.getElementById("scan-btn").textContent = "⏳ Scanning...";
+
+  const res  = await fetch("/api/scan", {
+    method:  "POST",
+    headers: {"Content-Type": "application/json"},
+    body:    JSON.stringify({ url, mode: selectedMode }),
+  });
+  const data = await res.json();
+
+  if (!data.scan_id) {
+    alert(data.error || "Failed to start scan. Please refresh and try again.");
+    document.getElementById("scan-btn").disabled    = false;
+    document.getElementById("scan-btn").textContent = "▶ Scan";
+    return;
+  }
+
+  currentScanId = data.scan_id;
+  if (pollInterval) clearInterval(pollInterval);
+  pollInterval = setInterval(() => pollScan(currentScanId), 1000);
+}
+
+async function pollScan(scanId) {
+  const res  = await fetch(`/api/scan/${scanId}`);
+  const scan = await res.json();
+  allScans[scanId] = scan;
+
+  renderContent(scan);
+  renderHistory();
+
+  if (scan.status === "complete" || scan.status === "cancelled") {
+    clearInterval(pollInterval);
+    document.getElementById("scan-btn").disabled    = false;
+    document.getElementById("scan-btn").textContent = "▶ Scan";
+  }
+}
+
+function renderHistory() {
+  const hist  = document.getElementById("history");
+  const scans = Object.values(allScans).reverse();
+  if (!scans.length) { hist.innerHTML = '<div class="empty">No scans yet</div>'; return; }
+
+  hist.innerHTML = scans.map(s => {
+    const risk  = riskLabel(s.score || 0);
+    const label = s.status === "queued"
+      ? "<span style='color:#555'>⏸ queued</span>"
+      : s.status === "cancelled"
+      ? "<span style='color:#555'>✕ cancelled</span>"
+      : s.status === "running"
+      ? "⏳"
+      : `<span class="risk-${risk}">${risk}</span>`;
+    const modeBadge = `<span class="mode-badge ${s.mode || 'passive'}">${(s.mode || 'passive').toUpperCase()}</span>`;
+    return `<div class="hist-item ${s.id === currentScanId ? "active" : ""}" onclick="viewScan('${s.id}')">
+      <div class="hist-url">${s.url}</div>
+      <div class="hist-meta">${s.started} ${modeBadge} ${label} ${s.findings ? s.findings.length + " findings" : ""}</div>
+    </div>`;
+  }).join("");
+}
+
+function viewScan(id) {
+  currentScanId = id;
+  renderContent(allScans[id]);
+  renderHistory();
+}
+
+// ── Triage ────────────────────────────────────────────────────
+async function setTriage(scanId, findingIndex, status) {
+  const btn = document.getElementById(`triage-status-${findingIndex}`);
+  if (btn) btn.textContent = "Saving...";
+
+  await fetch(`/api/scan/${scanId}/triage`, {
+    method:  "POST",
+    headers: {"Content-Type": "application/json"},
+    body:    JSON.stringify({ index: findingIndex, status }),
+  });
+
+  // Refresh scan data
+  const res  = await fetch(`/api/scan/${scanId}`);
+  const scan = await res.json();
+  allScans[scanId] = scan;
+  renderContent(scan);
+}
+
+// ── Webhook settings ──────────────────────────────────────────
+async function toggleWebhookPanel() {
+  const panel = document.getElementById("webhook-panel");
+  if (panel.style.display === "none") {
+    panel.style.display = "block";
+    const res  = await fetch("/api/settings/webhook");
+    const data = await res.json();
+    document.getElementById("webhook-input").value = data.webhook_url || "";
+  } else {
+    panel.style.display = "none";
+  }
+}
+
+async function saveWebhook() {
+  const url    = document.getElementById("webhook-input").value.trim();
+  const status = document.getElementById("webhook-status");
+  await fetch("/api/settings/webhook", {
+    method:  "POST",
+    headers: {"Content-Type": "application/json"},
+    body:    JSON.stringify({ url }),
+  });
+  status.textContent = url ? "✓ Webhook saved" : "✓ Webhook cleared";
+  status.style.color = "#4ade80";
+}
+
+async function testWebhook() {
+  const url    = document.getElementById("webhook-input").value.trim();
+  const status = document.getElementById("webhook-status");
+  if (!url) { status.textContent = "Enter a URL first"; status.style.color = "#ef4444"; return; }
+  await fetch("/api/settings/webhook", {
+    method:  "POST",
+    headers: {"Content-Type": "application/json"},
+    body:    JSON.stringify({ url }),
+  });
+  status.textContent = "⏳ Sending test...";
+  status.style.color = "#555";
+  // Trigger a test notification by sending a dummy payload directly
+  try {
+    await fetch(url, {
+      method:  "POST",
+      headers: {"Content-Type": "application/json"},
+      body:    JSON.stringify({ text: "🔔 *OWASP Scanner* — Webhook test successful!" }),
+    });
+    status.textContent = "✓ Test sent — check your Slack/Teams";
+    status.style.color = "#4ade80";
+  } catch(e) {
+    status.textContent = "✓ Saved. Test may be blocked by CORS — it will work from the server.";
+    status.style.color = "#fbbf24";
+  }
+}
+
+// ── Severity filter ───────────────────────────────────────────
+function setSevFilter(sev) {
+  window._sevFilter = sev;
+  if (currentScanId && allScans[currentScanId]) {
+    renderContent(allScans[currentScanId]);
+  }
+}
+
+// ── Cancel ────────────────────────────────────────────────────
+async function cancelScan(scanId) {
+  if (!confirm("Cancel this scan?")) return;
+  await fetch(`/api/scan/${scanId}/cancel`, { method: "POST" });
+  const res  = await fetch(`/api/scan/${scanId}`);
+  const scan = await res.json();
+  allScans[scanId] = scan;
+  renderContent(scan);
+  renderHistory();
+}
+
+// ── Export ────────────────────────────────────────────────────
+function downloadReport(scanId, type) {
+  const urls = {
+    pdf:   `/api/scan/${scanId}/report/pdf`,
+    json:  `/api/scan/${scanId}/export/json`,
+    sarif: `/api/scan/${scanId}/export/sarif`,
+    csv:   `/api/scan/${scanId}/export/csv`,
+  };
+  const a   = document.createElement("a");
+  a.href    = urls[type];
+  a.download = `report_${scanId}.${type === "sarif" ? "sarif" : type}`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+// ── Render ────────────────────────────────────────────────────
+function renderContent(scan) {
+  const c        = document.getElementById("content");
+  const findings = scan.findings || [];
+  const checks   = scan.checks   || [];
+
+  const critical = findings.filter(f => f.severity === "CRITICAL").length;
+  const high     = findings.filter(f => f.severity === "HIGH").length;
+  const medium   = findings.filter(f => f.severity === "MEDIUM").length;
+  const low      = findings.filter(f => f.severity === "LOW" || f.severity === "INFO").length;
+  const risk     = riskLabel(scan.score || 0);
+  const progress = scan.progress || 0;
+  const modeBadge = `<span class="mode-badge ${scan.mode || 'passive'}">${(scan.mode || 'passive').toUpperCase()}</span>`;
+
+  let html = `
+    <div class="stats-row">
+      <div class="stat-card"><div class="stat-val critical">${critical}</div><div class="stat-label">Critical</div></div>
+      <div class="stat-card"><div class="stat-val high">${high}</div><div class="stat-label">High</div></div>
+      <div class="stat-card"><div class="stat-val medium">${medium}</div><div class="stat-label">Medium</div></div>
+      <div class="stat-card"><div class="stat-val">${low}</div><div class="stat-label">Low / Info</div></div>
+    </div>
+
+    <div class="panel" style="margin-bottom:12px;">
+      <div class="panel-header">
+        <span>Scan Progress — ${scan.url}</span>
+        ${modeBadge}
+      </div>
+     <div style="padding:8px 0;">
+        <div class="progress-bar"><div class="progress-fill" style="width:${progress}%"></div></div>
+        <div style="padding:4px 14px;font-size:11px;color:#555;display:flex;align-items:center;gap:12px">
+          <span>${progress}% complete &nbsp;•&nbsp;
+          Risk score: <span class="risk-${risk}">${scan.score || 0}/100 (${risk})</span> &nbsp;•&nbsp;
+          Status: ${scan.status}</span>
+          ${(scan.status === "running" || scan.status === "queued") ? `
+            <button onclick="cancelScan('${scan.id}')" style="font-size:11px;padding:3px 10px;border:1px solid #ef4444;border-radius:4px;background:transparent;color:#ef4444;font-family:monospace;cursor:pointer">✕ Cancel</button>
+          ` : ""}
+        </div>
+      </div>
+      ${checks.map(ch => `
+        <div class="check-item">
+          <div class="dot dot-${ch.status === "running" ? "run" : ch.status === "done" ? "done" : ch.status === "error" ? "error" : "wait"}"></div>
+          <span style="flex:1;color:${ch.status === "done" ? "#e0e6f0" : "#555"}">${ch.name}</span>
+          ${ch.count > 0 ? `<span style="color:#fbbf24;font-size:11px">${ch.count} found</span>` : ""}
+          ${ch.status === "error" ? '<span style="color:#ef4444;font-size:11px">error</span>' : ""}
+        </div>`).join("")}
+    </div>`;
+
+    // Severity filter bar
+  const activeSevFilter = window._sevFilter || "ALL";
+  html += `
+    <div class="export-bar" style="margin-bottom:8px">
+      <span class="export-label">Filter:</span>
+      <button onclick="setSevFilter('ALL')"      class="export-btn ${activeSevFilter==='ALL'      ? 'active-filter':''}" style="${activeSevFilter==='ALL'      ?'border-color:#00b4d8;color:#00b4d8':''}">All</button>
+      <button onclick="setSevFilter('CRITICAL')" class="export-btn ${activeSevFilter==='CRITICAL' ? 'active-filter':''}" style="${activeSevFilter==='CRITICAL' ?'border-color:#ef4444;color:#ef4444':''}">Critical</button>
+      <button onclick="setSevFilter('HIGH')"     class="export-btn ${activeSevFilter==='HIGH'     ? 'active-filter':''}" style="${activeSevFilter==='HIGH'     ?'border-color:#f97316;color:#f97316':''}">High</button>
+      <button onclick="setSevFilter('MEDIUM')"   class="export-btn ${activeSevFilter==='MEDIUM'   ? 'active-filter':''}" style="${activeSevFilter==='MEDIUM'   ?'border-color:#fbbf24;color:#fbbf24':''}">Medium</button>
+      <button onclick="setSevFilter('LOW')"      class="export-btn ${activeSevFilter==='LOW'      ? 'active-filter':''}" style="${activeSevFilter==='LOW'      ?'border-color:#4ade80;color:#4ade80':''}">Low</button>
+      <button onclick="setSevFilter('INFO')"     class="export-btn ${activeSevFilter==='INFO'     ? 'active-filter':''}" style="${activeSevFilter==='INFO'     ?'border-color:#93c5fd;color:#93c5fd':''}">Info</button>
+      <span style="margin-left:auto;font-size:10px;color:#555">${findings.length} total findings</span>
+    </div>`;
+
+  // Export toolbar — show once scan is complete
+  if (scan.status === "complete" && findings.length > 0) {
+    html += `
+      <div class="export-bar">
+        <span class="export-label">Export:</span>
+        <button class="export-btn pdf"  onclick="downloadReport('${scan.id}','pdf')">📄 PDF Report</button>
+        <button class="export-btn json" onclick="downloadReport('${scan.id}','json')">{ } JSON</button>
+        <button class="export-btn sarif" onclick="downloadReport('${scan.id}','sarif')">⚙ SARIF</button>
+        <button class="export-btn" style="border-color:#34d399;color:#34d399" onclick="downloadReport('${scan.id}','csv')">⬇ CSV</button>
+        <span style="margin-left:auto;font-size:10px;color:#555">SARIF compatible with Burp, Jira, GitHub Advanced Security</span>
+      </div>`;
+  }
+
+  // Diff banner
+  if (scan.diff) {
+    const d = scan.diff;
+    html += `
+      <div class="diff-banner">
+        <span class="diff-title">📊 Changes vs previous scan</span>
+        <div class="diff-stat">
+          <div class="num diff-new">+${d.new}</div>
+          <div class="lbl">New</div>
+        </div>
+        <div class="diff-stat">
+          <div class="num diff-fixed">-${d.fixed}</div>
+          <div class="lbl">Fixed</div>
+        </div>
+        <div class="diff-stat">
+          <div class="num diff-persist">${d.persisting}</div>
+          <div class="lbl">Persisting</div>
+        </div>
+        <span class="diff-vs">vs scan ${d.vs_scan_id} — ${d.vs_started}</span>
+      </div>`;
+  }
+
+  const sevFilter = window._sevFilter || "ALL";
+
+  if (findings.length > 0) {
+    const grouped = {};
+    findings.forEach((f, globalIdx) => {
+      if (sevFilter !== "ALL" && f.severity !== sevFilter) return;
+      if (!grouped[f.severity]) grouped[f.severity] = [];
+      grouped[f.severity].push({ ...f, _globalIdx: globalIdx });
+    });
+
+    ["CRITICAL","HIGH","MEDIUM","LOW","INFO"].forEach(sev => {
+      if (!grouped[sev]) return;
+      html += `<div class="panel">
+        <div class="panel-header">${sev} — ${grouped[sev].length} finding${grouped[sev].length > 1 ? "s" : ""}</div>`;
+
+      grouped[sev].forEach((f) => {
+        const idx      = f._globalIdx;
+        const fid      = `f-${idx}`;
+        const signals  = (f.signals || []).map(s => `<div>• ${s}</div>`).join("");
+        const cves     = (f.cve || []).length ? `<span class="meta-pill" style="color:#f87171">CVE: ${f.cve.join(", ")}</span>` : "";
+        const modeClass = f.mode === "active" ? "mode-active" : "mode-passive";
+        const reqText  = (f.evidence?.request  || "No request captured").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+        const resText  = (f.evidence?.response || "No response captured").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+
+        // Triage status
+        const triage    = f.triage || "Unreviewed";
+        const tsClass   = `ts-${triage.replace(/ /g,'\\ ')}`;
+        const isConfirmed = triage === "Confirmed"      ? "t-confirmed"      : "";
+        const isFP        = triage === "False Positive" ? "t-false-positive" : "";
+        const isAR        = triage === "Accepted Risk"  ? "t-accepted-risk"  : "";
+
+        html += `
+<div class="finding">
+  <div class="finding-header" onclick="toggleFinding('${fid}')">
+    <span class="sev sev-${f.severity}">${f.severity}</span>
+    <span class="finding-type">${f.type}</span>
+    <span id="triage-status-${idx}" class="triage-status ${tsClass}">${triage}</span>
+    <span class="finding-owasp" style="margin-left:8px">${f.owasp || ""}</span>
+  </div>
+  <div class="finding-url"    onclick="toggleFinding('${fid}')">${f.url}</div>
+  <div class="finding-detail" onclick="toggleFinding('${fid}')">${f.detail}</div>
+  <div class="finding-meta"   onclick="toggleFinding('${fid}')">
+    <span class="meta-pill cwe">${f.cwe  || ""}</span>
+    <span class="meta-pill cvss">CVSS ${f.cvss || "N/A"}</span>
+    <span class="meta-pill conf">Confidence ${f.confidence || 0}%</span>
+    <span class="meta-pill ${modeClass}">${(f.mode || "passive").toUpperCase()}</span>
+    ${cves}
+  </div>
+
+  <div class="finding-body" id="fb-${fid}" style="display:none">
+    <div class="tab-bar">
+      <button class="tab active" onclick="switchTab('${fid}','signals',this)">Signals</button>
+      <button class="tab" onclick="switchTab('${fid}','request',this)">Request</button>
+      <button class="tab" onclick="switchTab('${fid}','response',this)">Response</button>
+      <button class="tab" onclick="switchTab('${fid}','fix',this)">Fix</button>
+    </div>
+    <div class="tab-panel" id="tp-${fid}-signals">${signals || "<span style='color:#555'>No signals recorded</span>"}</div>
+    <div class="tab-panel" id="tp-${fid}-request"  style="display:none"><pre class="http-block">${reqText}</pre></div>
+    <div class="tab-panel" id="tp-${fid}-response" style="display:none"><pre class="http-block">${resText}</pre></div>
+    <div class="tab-panel" id="tp-${fid}-fix"      style="display:none"><div class="finding-fix">💡 ${f.fix}</div></div>
+
+    <div class="triage-bar">
+      <span class="triage-label">Triage:</span>
+      <button class="triage-btn ${isConfirmed}"     onclick="setTriage('${scan.id}',${idx},'Confirmed')">✓ Confirmed</button>
+      <button class="triage-btn ${isFP}"            onclick="setTriage('${scan.id}',${idx},'False Positive')">✗ False Positive</button>
+      <button class="triage-btn ${isAR}"            onclick="setTriage('${scan.id}',${idx},'Accepted Risk')">⚠ Accepted Risk</button>
+      ${triage !== "Unreviewed" ? `<button class="triage-btn" onclick="setTriage('${scan.id}',${idx},'Unreviewed')" style="margin-left:auto;font-size:10px">Reset</button>` : ""}
+    </div>
+  </div>
+</div>`;
+      });
+
+      html += `</div>`;
+    });
+
+  } else if (scan.status === "complete") {
+    const msg = (window._sevFilter && window._sevFilter !== "ALL")
+      ? `No ${window._sevFilter} findings`
+      : "✓ No vulnerabilities detected";
+    const col = (window._sevFilter && window._sevFilter !== "ALL") ? "#555" : "#4ade80";
+    html += `<div class="panel"><div class="empty" style="color:${col}">${msg}</div></div>`;
+  }
+
+  c.innerHTML = html;
+}
+
+function toggleFinding(fid) {
+  const body = document.getElementById("fb-" + fid);
+  if (!body) return;
+  body.style.display = body.style.display === "none" ? "block" : "none";
+}
+
+function switchTab(fid, tab, btn) {
+  ["signals","request","response","fix"].forEach(t => {
+    document.getElementById(`tp-${fid}-${t}`).style.display = t === tab ? "block" : "none";
+  });
+  btn.parentElement.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+}
+</script>
+</body>
+</html>
