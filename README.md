@@ -175,12 +175,10 @@ hawkeye-OWASP-scanner/
 
 ## ⚙️ Configuration
 
-Open `main.py` and change these at the top:
-
-```python
-USERNAME = "admin"   # change this
-PASSWORD = "root"    # change this to something strong
-```
+Create a `.env` file in the project folder (copy from `.env.example`):
+SCANNER_USERNAME=yourchoice
+SCANNER_PASSWORD=yourpassword
+Never commit your `.env` file — it is listed in `.gitignore` automatically.
 
 ---
 
